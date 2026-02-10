@@ -177,6 +177,38 @@ ENTRY(stext)
 	//cbz	x23, __error_p			// invalid processor (x23=0)?
 
 	bl	__calc_phys_offset		// x24=PHYS_OFFSET, x28=PHYS_OFFSET-PAGE_OFFSET
+
+	/* Relocate FDT if > 512MB (0x20000000) */
+	mov	x2, #1
+	lsl	x2, x2, #29
+	cmp	x21, x2
+	b.ls	0f			// If low, skip copy
+
+	/* Calculate Phys(_end) */
+	ldr	x2, =_end
+	add	x2, x2, x28		// x2 = Phys(_end) -> New FDT Addr
+	
+	/* Align dest to 8 bytes */
+	add	x2, x2, #7
+	lsr	x2, x2, #3
+	lsl	x2, x2, #3
+
+	mov	x3, x21			// x3 = Src (Old FDT)
+	mov	x21, x2			// x21 = Dest (New FDT)
+
+	/* Get FDT size from header */
+	ldr	w4, [x3, #4]		// Read total_size (BE)
+	rev	w4, w4			// Convert to LE
+
+	/* Align size to 8 bytes for copy loop */
+	add	w4, w4, #7
+	lsr	w4, w4, #3		// Count of 8-byte words
+
+1:	ldr	x5, [x3], #8
+	str	x5, [x2], #8
+	subs	w4, w4, #1
+	b.ne	1b
+0:
 	bl	__vet_fdt
 	bl	__create_page_tables		// x25=TTBR0, x26=TTBR1
 	/*
