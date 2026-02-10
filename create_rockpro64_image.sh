@@ -86,6 +86,11 @@ if [ ! -f "$IDBLOADER_BUILD" ] || [ ! -f "$UBOOT_ITB_BUILD" ]; then
     pushd "$UBOOT_DIR"
     # Configure for RockPro64
     make rockpro64-rk3399_defconfig
+    
+    # Patch config to force low memory placement of FDT/Initrd
+    # This prevents the kernel from failing to map the FDT if it looks in limited initial page tables.
+    echo 'CONFIG_PREBOOT="setenv fdt_high 0x1f000000; setenv initrd_high 0x1f000000"' >> .config
+    
     # Build
     # We must explicitly pass BL31 env var
     BL31="$BL31_ELF" make CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc)
@@ -164,10 +169,18 @@ LABEL kitten
     APPEND console=ttyS2,1500000n8 root=/dev/ram0 rw init=/init
 EOF
 
+# Create uEnv.txt to enforce fdt_high/initrd_high (Double tap)
+cat > uEnv.txt <<EOF
+fdt_high=0x1f000000
+initrd_high=0x1f000000
+EOF
+
 # Copy file
 mcopy -i "$TEMP_BOOT_IMG" "$KERNEL" ::vmlwk.bin
 mcopy -i "$TEMP_BOOT_IMG" "$DTB" ::rk3399-rockpro64.dtb
 mcopy -i "$TEMP_BOOT_IMG" "$INITRD" ::initrd.img
+mcopy -i "$TEMP_BOOT_IMG" uEnv.txt ::uEnv.txt
+rm uEnv.txt
 mmd -i "$TEMP_BOOT_IMG" ::extlinux
 mcopy -i "$TEMP_BOOT_IMG" "$EXTLINUX_CONF" ::extlinux/extlinux.conf
 rm "$EXTLINUX_CONF"
