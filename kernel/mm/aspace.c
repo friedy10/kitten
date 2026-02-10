@@ -472,57 +472,63 @@ int __aspace_add_region(struct aspace *aspace, vaddr_t start, size_t extent,
   struct list_head *pos;
   vaddr_t end = calc_end(start, extent);
 
+  early_printk("  __aspace_add_region: start=%p extent=%p end=%p pagesz=%p\n",
+               (void *)start, (void *)extent, (void *)end, (void *)pagesz);
+
   if (!aspace || !start)
     return -EINVAL;
 
   /* Region must have non-zero size */
   if (extent == 0) {
-    printk(KERN_WARNING "Extent must be non-zero.\n");
+    early_printk("  __aspace_add_region: FAIL extent==0\n");
     return -EINVAL;
   }
 
   /* Region must have a positive size */
   if (start >= end) {
-    printk(KERN_WARNING "Invalid region size (start=0x%lx, extent=0x%lx).\n",
-           start, extent);
+    early_printk("  __aspace_add_region: FAIL start>=end\n");
     return -EINVAL;
   }
 
+  early_printk("  __aspace_add_region: size checks passed\n");
+
   /* Architecture must support the page size specified */
   if ((pagesz & cpu_info[0].pagesz_mask) == 0) {
-    printk(KERN_WARNING "Invalid page size specified (pagesz=0x%lx).\n",
-           pagesz);
+    early_printk("  __aspace_add_region: FAIL bad pagesz\n");
     return -EINVAL;
   }
   pagesz &= cpu_info[0].pagesz_mask;
 
   /* Only one page size may be specified */
   if (!is_power_of_2(pagesz)) {
-    printk(KERN_WARNING "More than one page size specified (pagesz=0x%lx).\n",
-           pagesz);
+    early_printk("  __aspace_add_region: FAIL multiple pagesz\n");
     return -EINVAL;
   }
 
   /* Region must be aligned to at least the specified page size */
   if ((start & (pagesz - 1)) || ((end != ULONG_MAX) && (end & (pagesz - 1)))) {
-    printk(KERN_WARNING "Region is misaligned (start=0x%lx, end=0x%lx).\n",
-           start, end);
+    early_printk("  __aspace_add_region: FAIL misaligned\n");
     return -EINVAL;
   }
+
+  early_printk("  __aspace_add_region: validation passed\n");
 
   /* Region must not overlap with any existing regions */
   list_for_each_entry(cur, &aspace->region_list, link) {
     if ((start < cur->end) && (end > cur->start)) {
-      printk(KERN_WARNING "Region overlaps with existing region (0x%lx--0x%lx "
-                          "overlaps with existing 0x%lx--0x%lx).\n",
-             start, end, cur->start, cur->end);
+      early_printk("  __aspace_add_region: FAIL overlap\n");
       return -ENOTUNIQ;
     }
   }
 
+  early_printk(
+      "  __aspace_add_region: overlap check passed, calling kmem_alloc\n");
+
   /* Allocate and initialize a new region object */
   if ((rgn = kmem_alloc(sizeof(struct region))) == NULL)
     return -ENOMEM;
+
+  early_printk("  __aspace_add_region: kmem_alloc done, initializing region\n");
 
   rgn->aspace = aspace;
   rgn->start = start;
@@ -547,6 +553,7 @@ int __aspace_add_region(struct aspace *aspace, vaddr_t start, size_t extent,
       break;
   }
   list_add_tail(&rgn->link, pos);
+  early_printk("  __aspace_add_region: done\n");
   return 0;
 }
 
