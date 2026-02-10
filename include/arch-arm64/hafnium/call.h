@@ -16,7 +16,10 @@
  * This function must be implemented to trigger the architecture-specific
  * mechanism to call to the hypervisor.
  */
-int64_t hf_call(uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3);
+inline int64_t hf_call(uint64_t arg0, uint64_t arg1, uint64_t arg2, uint64_t arg3){
+    // Do nothing
+    return 0;
+}
 struct ffa_value ffa_call(struct ffa_value args);
 
 /**
