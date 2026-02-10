@@ -1,24 +1,23 @@
-#include <lwk/kernel.h>
-#include <lwk/init.h>
-#include <lwk/task.h>
-#include <lwk/cpu.h>
-#include <lwk/ptrace.h>
-#include <lwk/string.h>
-#include <lwk/delay.h>
+#include <arch/irqchip.h>
 #include <arch/processor.h>
 #include <arch/proto.h>
-#include <arch/irqchip.h>
 #include <arch/tsc.h>
-
-#include <lwk/smp.h>
+#include <lwk/cpu.h>
+#include <lwk/delay.h>
 #include <lwk/init.h>
-#include <lwk/bootmem.h>
-#include <lwk/cpuinfo.h>
-#include <lwk/params.h>
+#include <lwk/kernel.h>
+#include <lwk/ptrace.h>
+#include <lwk/string.h>
+#include <lwk/task.h>
+
 #include <arch/io.h>
 #include <arch/mpspec.h>
 #include <arch/proto.h>
-
+#include <lwk/bootmem.h>
+#include <lwk/cpuinfo.h>
+#include <lwk/init.h>
+#include <lwk/params.h>
+#include <lwk/smp.h>
 
 /**
  * Bitmap of CPUs that have been initialized.
@@ -35,49 +34,39 @@ static cpumask_t cpu_initialized_map;
  *
  * This is similar to thread-local data for user-level programs.
  */
-void __init
-pda_init(unsigned int cpu, struct task_struct *task)
-{
-	struct ARM64_pda *pda = cpu_pda(cpu);
+void __init pda_init(unsigned int cpu, struct task_struct *task) {
+  struct ARM64_pda *pda = cpu_pda(cpu);
 
-	mb();
-	set_tpidr_el1((u64)pda);
-	mb();
+  mb();
+  set_tpidr_el1((u64)pda);
+  mb();
 
-
-	pda->cpunumber     = cpu;
-	pda->pcurrent      = task;
-	pda->active_aspace = task->aspace;
-	pda->kernelstack   = (vaddr_t)task + TASK_SIZE - PDA_STACKOFFSET;
-	pda->mmu_state     = 0;
-	pda->irqcount      = -1;
-	mb();
-
+  pda->cpunumber = cpu;
+  pda->pcurrent = task;
+  pda->active_aspace = task->aspace;
+  pda->kernelstack = (vaddr_t)task + TASK_SIZE - PDA_STACKOFFSET;
+  pda->mmu_state = 0;
+  pda->irqcount = -1;
+  mb();
 }
-
 
 /**
  * Installs the calling CPU's Local Descriptor Table (LDT).
  * All CPUs share the same IDT.
  */
-static void __init
-idt_init(void)
-{
-	/*
-	 * The bootstrap CPU has already filled in the IDT table via the
-	 * interrupts_init() call in setup.c. All we need to do is tell the CPU
-	 * about it.
-	 */
-	//asm volatile("lidt %0" :: "m" (idt_descr));
+static void __init idt_init(void) {
+  /*
+   * The bootstrap CPU has already filled in the IDT table via the
+   * interrupts_init() call in setup.c. All we need to do is tell the CPU
+   * about it.
+   */
+  // asm volatile("lidt %0" :: "m" (idt_descr));
 }
-
 
 /**
  * Initializes the calling CPU's debug registers.
  */
-static void __init
-dbg_init(void)
-{
+static void __init dbg_init(void) {
 #if 0
 	/*
  	 * Clear the CPU's debug registers.
@@ -95,44 +84,41 @@ dbg_init(void)
 #endif
 }
 
-void __init
-cpu_init(void)
-{
-	/*
- 	 * Get a reference to the currently executing task and the ID of the
- 	 * CPU being initialized.  We can't use the normal 'current' mechanism
- 	 * since it relies on the PDA being initialized, which it isn't for all
- 	 * CPUs other than the boot CPU (id=0). pda_init() is called below.
- 	 */
+void __init cpu_init(void) {
+  /*
+   * Get a reference to the currently executing task and the ID of the
+   * CPU being initialized.  We can't use the normal 'current' mechanism
+   * since it relies on the PDA being initialized, which it isn't for all
+   * CPUs other than the boot CPU (id=0). pda_init() is called below.
+   */
 
-	struct task_struct *me = get_current_via_RSP();
-	unsigned int       cpu = me->cpu_id; /* logical ID */
+  struct task_struct *me = get_current_via_RSP();
+  unsigned int cpu = me->cpu_id; /* logical ID */
 
+  if (cpu_test_and_set(cpu, cpu_initialized_map))
+    panic("CPU#%u already initialized!\n", cpu);
 
+  early_printk(KERN_DEBUG "Initializing CPU#%u\n", cpu);
 
-	if (cpu_test_and_set(cpu, cpu_initialized_map))
-		panic("CPU#%u already initialized!\n", cpu);
+  pda_init(cpu, me); /* per-cpu data area */
+  early_printk("pda_init done\n");
 
-	early_printk(KERN_DEBUG "Initializing CPU#%u\n", cpu);
+  identify_cpu(); /* determine cpu features via CPUID */
+  early_printk("identify_cpu done\n");
+  store_cpu_topology(cpu); /* Update topology map with CPU info */
+  early_printk("store_cpu_topology done\n");
 
-	pda_init(cpu, me);	 /* per-cpu data area */
-
-	identify_cpu();		 /* determine cpu features via CPUID */
-	store_cpu_topology(cpu); /* Update topology map with CPU info */
-
-	//dbg_init();		 /* debug registers */
-	//fpu_init();		 /* floating point unit */
-	irqchip_local_init();    /* Interrupt Controller */
-	time_init();		 /* detects CPU frequency, udelay(), etc. */
-	barrier();		 /* compiler memory barrier, avoids reordering */
-
+  // dbg_init();		 /* debug registers */
+  // fpu_init();		 /* floating point unit */
+  irqchip_local_init(); /* Interrupt Controller */
+  early_printk("irqchip_local_init done\n");
+  time_init(); /* detects CPU frequency, udelay(), etc. */
+  early_printk("time_init done\n");
+  barrier(); /* compiler memory barrier, avoids reordering */
 }
 
-
-int
-phys_cpu_add(unsigned int phys_cpu_id, unsigned int apic_id)
-{
-	printk("Unhandled function %s\n",__FUNCTION__);
+int phys_cpu_add(unsigned int phys_cpu_id, unsigned int apic_id) {
+  printk("Unhandled function %s\n", __FUNCTION__);
 #if 0
 	int logical_cpu;
 	cpumask_t tmp_map;
@@ -214,17 +200,14 @@ phys_cpu_add(unsigned int phys_cpu_id, unsigned int apic_id)
 
 	return logical_cpu;
 #endif
-	return 0;
+  return 0;
 }
 
 /*
  * Hot remove a target cpu
  */
-int
-phys_cpu_remove(unsigned int phys_cpu_id,
-		unsigned int apic_id)
-{
-	printk("Unhandled function %s\n",__FUNCTION__);
+int phys_cpu_remove(unsigned int phys_cpu_id, unsigned int apic_id) {
+  printk("Unhandled function %s\n", __FUNCTION__);
 #if 0
         unsigned int logical_id;
         unsigned int target_cpu = -1;
@@ -293,28 +276,24 @@ phys_cpu_remove(unsigned int phys_cpu_id,
 		free_per_cpu_area(target_cpu);
         }
 #endif
-        return 0;
+  return 0;
 }
 
-
-
-void
-arch_shutdown_cpu(void)
-{
-	/* The LAPIC can end up in a weird state if we go into cli/hlt without
-	 * acking the EOI first. Of course, this is only the case if we are in
-	 * interrupt
-	 */
+void arch_shutdown_cpu(void) {
+  /* The LAPIC can end up in a weird state if we go into cli/hlt without
+   * acking the EOI first. Of course, this is only the case if we are in
+   * interrupt
+   */
 
 #if 0
 	if (in_interrupt())
 		lapic_ack_interrupt();
 #endif
 
-	local_irq_disable();
+  local_irq_disable();
 
-	while (1) {
-	    halt();
-	    cpu_relax();
-	}
+  while (1) {
+    halt();
+    cpu_relax();
+  }
 }
