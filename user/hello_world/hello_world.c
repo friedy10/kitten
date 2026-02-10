@@ -6,8 +6,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <lwk/liblwk.h>
-#include <lwk/rcr/rcr.h>
 #include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -20,6 +18,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <utmpx.h>
+
+#include <lwk/liblwk.h>
+#include <lwk/rcr/rcr.h>
 
 #define TEST_BLOCK_LAYER 1
 // #define TEST_TASK_MEAS 1
