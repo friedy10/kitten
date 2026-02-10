@@ -246,6 +246,7 @@ int aspace_create(id_t id_request, const char *name, id_t *id) {
     status = -ENOMEM;
     goto fail_aspace_alloc;
   }
+  early_printk("aspace_create: kmem_alloc done\n");
 
   /*
    * Initialize the address space. kmem_alloc() allocates zeroed memory
@@ -285,6 +286,7 @@ int aspace_create(id_t id_request, const char *name, id_t *id) {
                                VM_KERNEL, PAGE_SIZE, "kernel");
   if (status)
     goto fail_add_region;
+  early_printk("aspace_create: __aspace_add_region done\n");
 
   /* Initialize futex queues, used to hold addr space private futexes */
   for (i = 0; i < ARRAY_SIZE(aspace->futex_queues); i++)
@@ -293,6 +295,7 @@ int aspace_create(id_t id_request, const char *name, id_t *id) {
   /* Do architecture-specific initialization */
   if ((status = arch_aspace_create(aspace)) != 0)
     goto fail_arch;
+  early_printk("aspace_create: arch_aspace_create done\n");
 
   /* Add new address space to a hash table, for quick lookups by ID */
   htable_add(htable, aspace);
