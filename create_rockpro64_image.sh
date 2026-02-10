@@ -173,6 +173,9 @@ EOF
 cat > uEnv.txt <<EOF
 fdt_high=0x1f000000
 initrd_high=0x1f000000
+kernel_addr_r=0x00280000
+ramdisk_addr_r=0x08000000
+fdt_addr_r=0x04000000
 EOF
 
 # Copy file
