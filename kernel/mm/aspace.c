@@ -270,22 +270,29 @@ int aspace_create(id_t id_request, const char *name, id_t *id) {
   syscalls_clear(aspace->hio_syscall_mask);
 
   list_head_init(&aspace->sigpending.list);
+  early_printk("aspace_create: fields init done\n");
 
   aspace->parent = current->aspace;
   list_head_init(&aspace->child_list);
   waitq_init(&aspace->child_exit_waitq);
 
+  early_printk("aspace_create: acquiring parent lock\n");
   spin_lock(&current->aspace->lock);
   list_add_tail(&aspace->child_link, &current->aspace->child_list);
   spin_unlock(&current->aspace->lock);
+  early_printk("aspace_create: child link done\n");
 
   /* Create a region for the kernel portion of the address space */
+  early_printk("aspace_create: calling __aspace_add_region\n");
   status = __aspace_add_region(aspace, PAGE_OFFSET,
                                ULONG_MAX - PAGE_OFFSET +
                                    1, /* # bytes to end of memory */
                                VM_KERNEL, PAGE_SIZE, "kernel");
-  if (status)
+  if (status) {
+    early_printk("aspace_create: __aspace_add_region FAILED status=%d\n",
+                 status);
     goto fail_add_region;
+  }
   early_printk("aspace_create: __aspace_add_region done\n");
 
   /* Initialize futex queues, used to hold addr space private futexes */

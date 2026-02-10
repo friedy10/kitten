@@ -18,33 +18,30 @@
  */
 
 #include <lwk/signal.h>
-//#include <lwk/personality.h>
+// #include <lwk/personality.h>
 #include <lwk/kallsyms.h>
 #include <lwk/spinlock.h>
-//#include <lwk/uaccess.h>
-//#include <lwk/hardirq.h>
-//#include <lwk/kdebug.h>
-//#include <lwk/module.h>
-//#include <lwk/kexec.h>
+// #include <lwk/uaccess.h>
+// #include <lwk/hardirq.h>
+// #include <lwk/kdebug.h>
+// #include <lwk/module.h>
+// #include <lwk/kexec.h>
+#include <arch/syscalls.h>
 #include <lwk/delay.h>
 #include <lwk/init.h>
 #include <lwk/sched.h>
-#include <arch/syscalls.h>
 
 #include <arch/atomic.h>
 #include <arch/ptrace.h>
-//#include <arch/debug-monitors.h>
-//#include <arch/traps.h>
-//#include <arch/stacktrace.h>
+// #include <arch/debug-monitors.h>
+// #include <arch/traps.h>
+// #include <arch/stacktrace.h>
 #include <arch/exception.h>
-//#include <arch/system_misc.h>
+// #include <arch/system_misc.h>
 
-static const char *handler[]= {
-	"Synchronous Abort",
-	"IRQ",
-	"FIQ",
-	"Error"
-};
+extern int early_printk(const char *fmt, ...);
+
+static const char *handler[] = {"Synchronous Abort", "IRQ", "FIQ", "Error"};
 
 int show_unhandled_signals = 1;
 
@@ -52,56 +49,52 @@ int show_unhandled_signals = 1;
  * Dump out the contents of some memory nicely...
  */
 static void dump_mem(const char *lvl, const char *str, unsigned long bottom,
-		     unsigned long top)
-{
-	unsigned long first;
-	//mm_segment_t fs;
-	int i;
+                     unsigned long top) {
+  unsigned long first;
+  // mm_segment_t fs;
+  int i;
 
-	/*
-	 * We need to switch to kernel mode so that we can use __get_user
-	 * to safely read from kernel space.  Note that we now dump the
-	 * code first, just in case the backtrace kills us.
-	 */
-	//fs = get_fs();
-	//set_fs(KERNEL_DS);
+  /*
+   * We need to switch to kernel mode so that we can use __get_user
+   * to safely read from kernel space.  Note that we now dump the
+   * code first, just in case the backtrace kills us.
+   */
+  // fs = get_fs();
+  // set_fs(KERNEL_DS);
 
-	printk("%s%s(0x%016lx to 0x%016lx)\n", lvl, str, bottom, top);
+  printk("%s%s(0x%016lx to 0x%016lx)\n", lvl, str, bottom, top);
 
-	for (first = bottom & ~31; first < top; first += 32) {
-		unsigned long p;
-		char str[sizeof(" 12345678") * 8 + 1];
+  for (first = bottom & ~31; first < top; first += 32) {
+    unsigned long p;
+    char str[sizeof(" 12345678") * 8 + 1];
 
-		memset(str, ' ', sizeof(str));
-		str[sizeof(str) - 1] = '\0';
+    memset(str, ' ', sizeof(str));
+    str[sizeof(str) - 1] = '\0';
 
-		for (p = first, i = 0; i < 8 && p < top; i++, p += 4) {
-			if (p >= bottom && p < top) {
-				unsigned int val;
-				if (__get_user(val, (unsigned int *)p) == 0)
-					sprintf(str + i * 9, " %08x", val);
-				else
-					sprintf(str + i * 9, " ????????");
-			}
-		}
-		printk("%s%04lx:%s\n", lvl, first & 0xffff, str);
-	}
+    for (p = first, i = 0; i < 8 && p < top; i++, p += 4) {
+      if (p >= bottom && p < top) {
+        unsigned int val;
+        if (__get_user(val, (unsigned int *)p) == 0)
+          sprintf(str + i * 9, " %08x", val);
+        else
+          sprintf(str + i * 9, " ????????");
+      }
+    }
+    printk("%s%04lx:%s\n", lvl, first & 0xffff, str);
+  }
 
-	//set_fs(fs);
+  // set_fs(fs);
 }
 
-static void dump_backtrace_entry(unsigned long where, unsigned long stack)
-{
-	print_ip_sym(where);
-	if (in_exception_text(where))
-		dump_mem("", "Exception stack", stack,
-			 stack + sizeof(struct pt_regs));
+static void dump_backtrace_entry(unsigned long where, unsigned long stack) {
+  print_ip_sym(where);
+  if (in_exception_text(where))
+    dump_mem("", "Exception stack", stack, stack + sizeof(struct pt_regs));
 }
 
-static void dump_instr(const char *lvl, struct pt_regs *regs)
-{
-	unsigned long addr = instruction_pointer(regs);
-	unsigned int exception = 0;
+static void dump_instr(const char *lvl, struct pt_regs *regs) {
+  unsigned long addr = instruction_pointer(regs);
+  unsigned int exception = 0;
 
 #if 0
 	char str[sizeof("00000000 ") * 5 + 2 + 1], *p = str;
@@ -129,16 +122,14 @@ static void dump_instr(const char *lvl, struct pt_regs *regs)
 	}
 	printk("%sCode: %s\n", lvl, str);
 #endif
-	asm volatile("mrs %0, ESR_EL1\n":"=r"(exception));
-	printk("EC : 0x%x\n",exception >> 26);
-	printk("ISS: 0x%x\n",exception & ((-1u) >> 7));
-	printk("PC: %08x\n",addr);
-
+  asm volatile("mrs %0, ESR_EL1\n" : "=r"(exception));
+  printk("EC : 0x%x\n", exception >> 26);
+  printk("ISS: 0x%x\n", exception & ((-1u) >> 7));
+  printk("PC: %08x\n", addr);
 }
 
-static void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
-{
-	asm volatile("b . \n");
+static void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk) {
+  asm volatile("b . \n");
 #if 0
 
 	//struct stackframe frame;
@@ -179,10 +170,9 @@ static void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 #endif
 }
 
-void show_stack(struct task_struct *tsk, unsigned long *sp)
-{
-	dump_backtrace(NULL, tsk);
-	barrier();
+void show_stack(struct task_struct *tsk, unsigned long *sp) {
+  dump_backtrace(NULL, tsk);
+  barrier();
 }
 
 #ifdef CONFIG_PREEMPT
@@ -197,24 +187,23 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 #endif
 
 static int __die(const char *str, int err, struct thread_info *thread,
-		 struct pt_regs *regs)
-{
-	//struct task_struct *tsk = thread->task;
-	static int die_counter;
-	int ret;
+                 struct pt_regs *regs) {
+  // struct task_struct *tsk = thread->task;
+  static int die_counter;
+  int ret;
 
-	pr_emerg("Internal error: %s: %x [#%d]" S_PREEMPT S_SMP "\n",
-		 str, err, ++die_counter);
+  pr_emerg("Internal error: %s: %x [#%d]" S_PREEMPT S_SMP "\n", str, err,
+           ++die_counter);
 
-	/* trap and error numbers are mostly meaningless on ARM */
-	//ret = notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV);
-	//if (ret == NOTIFY_STOP)
-		//return ret;
+  /* trap and error numbers are mostly meaningless on ARM */
+  // ret = notify_die(DIE_OOPS, str, regs, err, 0, SIGSEGV);
+  // if (ret == NOTIFY_STOP)
+  // return ret;
 
-	//print_modules();
-	//__show_regs(regs);
-	//pr_emerg("Process %.*s (pid: %d, stack limit = 0x%p)\n",
-		// TASK_COMM_LEN, tsk->comm, task_pid_nr(tsk), thread + 1);
+  // print_modules();
+  //__show_regs(regs);
+  // pr_emerg("Process %.*s (pid: %d, stack limit = 0x%p)\n",
+  //  TASK_COMM_LEN, tsk->comm, task_pid_nr(tsk), thread + 1);
 #if 0
 	if (!user_mode(regs) || in_interrupt()) {
 		//dump_mem(KERN_EMERG, "Stack: ", regs->sp,
@@ -223,18 +212,17 @@ static int __die(const char *str, int err, struct thread_info *thread,
 		dump_instr(KERN_EMERG, regs);
 	}
 #endif
-	return ret;
+  return ret;
 }
 
-//static DEFINE_RAW_SPINLOCK(die_lock);
+// static DEFINE_RAW_SPINLOCK(die_lock);
 static DEFINE_SPINLOCK(die_lock);
 
 /*
  * This function is protected against re-entrancy.
  */
-void die(const char *str, struct pt_regs *regs, int err)
-{
-	asm volatile("b . \n");
+void die(const char *str, struct pt_regs *regs, int err) {
+  asm volatile("b . \n");
 #if 0
 	struct thread_info *thread = current_thread_info();
 	int ret;
@@ -264,9 +252,8 @@ void die(const char *str, struct pt_regs *regs, int err)
 }
 
 void arm64_notify_die(const char *str, struct pt_regs *regs,
-		      struct siginfo *info, int err)
-{
-	asm volatile("b . \n");
+                      struct siginfo *info, int err) {
+  asm volatile("b . \n");
 #if 0
 
 	if (user_mode(regs))
@@ -276,41 +263,38 @@ void arm64_notify_die(const char *str, struct pt_regs *regs,
 #endif
 }
 
-asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
-{
+asmlinkage void __exception do_undefinstr(struct pt_regs *regs) {
 
+  siginfo_t info;
+  void __user *pc = (void __user *)instruction_pointer(regs);
 
-	siginfo_t info;
-	void __user *pc = (void __user *)instruction_pointer(regs);
+  /* check for AArch32 breakpoint instructions */
+  // if (!aarch32_break_handler(regs))
+  //		return;
 
-	/* check for AArch32 breakpoint instructions */
-	//if (!aarch32_break_handler(regs))
-//		return;
+  // if (show_unhandled_signals && unhandled_signal(current, SIGILL) &&
+  // printk_ratelimit()) {
+  // pr_info("%s[%d]: undefined instruction: pc=%p\n",
+  //			current->comm, task_pid_nr(current), pc);
+  dump_instr(KERN_INFO, regs);
+  //	}
 
-	//if (show_unhandled_signals && unhandled_signal(current, SIGILL) &&
-	    //printk_ratelimit()) {
-		//pr_info("%s[%d]: undefined instruction: pc=%p\n",
-//			current->comm, task_pid_nr(current), pc);
-		dump_instr(KERN_INFO, regs);
-//	}
+  info.si_signo = SIGILL;
+  info.si_errno = 0;
+  info.si_code = ILL_ILLOPC;
+  info.si_addr = pc;
 
-	info.si_signo = SIGILL;
-	info.si_errno = 0;
-	info.si_code  = ILL_ILLOPC;
-	info.si_addr  = pc;
+  printk("Undefined Instruction at %p [instr : %x]\n", pc, *(uint32_t *)pc);
 
-	printk("Undefined Instruction at %p [instr : %x]\n", pc, *(uint32_t *)pc);
-
-	show_registers(regs);
-	panic("Oops - undefined instruction");
-	arm64_notify_die("Oops - undefined instruction", regs, &info, 0);
+  show_registers(regs);
+  panic("Oops - undefined instruction");
+  arm64_notify_die("Oops - undefined instruction", regs, &info, 0);
 }
 
 long compat_arm_syscall(struct pt_regs *regs);
 
-asmlinkage long do_ni_syscall(struct pt_regs *regs)
-{
-	asm volatile("b . \n");
+asmlinkage long do_ni_syscall(struct pt_regs *regs) {
+  asm volatile("b . \n");
 #if 0
 
 #ifdef CONFIG_COMPAT
@@ -330,57 +314,37 @@ asmlinkage long do_ni_syscall(struct pt_regs *regs)
 			__show_regs(regs);
 	}
 #endif
-	return syscall_not_implemented();
+  return syscall_not_implemented();
 }
 
 /*
  * bad_mode handles the impossible case in the exception vector.
  */
-asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr)
-{
+asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr) {
+  early_printk("\n*** BAD MODE EXCEPTION ***\n");
+  early_printk("Bad Mode (reason=0x%x) (esr=0x%x)\n", reason, esr);
+  early_printk("  ESR.EC=0x%x (exception class)\n", esr >> 26);
+  early_printk("  ESR.ISS=0x%x\n", esr & 0x1FFFFFF);
 
-	printk("Bad Mode (reason=%x) (esr=%x)\n", reason, esr);
+  if (regs) {
+    early_printk("  PC: %p\n", (void *)instruction_pointer(regs));
+    early_printk("  SP: %p\n", (void *)regs->sp);
+    early_printk("  LR: %p\n", (void *)regs->regs[30]);
+  }
 
-	show_registers(regs);
-	panic("Oops - undefined instruction");
-
-
-	asm volatile("b . \n");
-#if 0
-
-	siginfo_t info;
-	void __user *pc = (void __user *)instruction_pointer(regs);
-	console_verbose();
-
-	pr_crit("Bad mode in %s handler detected, code 0x%08x\n",
-		handler[reason], esr);
-	__show_regs(regs);
-
-	info.si_signo = SIGILL;
-	info.si_errno = 0;
-	info.si_code  = ILL_ILLOPC;
-	info.si_addr  = pc;
-
-	arm64_notify_die("Oops - bad mode", regs, &info, 0);
-#endif
+  panic("Oops - bad mode exception (esr=0x%x)\n", esr);
 }
 
-void __pte_error(const char *file, int line, unsigned long val)
-{
-	printk("%s:%d: bad pte %016lx.\n", file, line, val);
+void __pte_error(const char *file, int line, unsigned long val) {
+  printk("%s:%d: bad pte %016lx.\n", file, line, val);
 }
 
-void __pmd_error(const char *file, int line, unsigned long val)
-{
-	printk("%s:%d: bad pmd %016lx.\n", file, line, val);
+void __pmd_error(const char *file, int line, unsigned long val) {
+  printk("%s:%d: bad pmd %016lx.\n", file, line, val);
 }
 
-void __pgd_error(const char *file, int line, unsigned long val)
-{
-	printk("%s:%d: bad pgd %016lx.\n", file, line, val);
+void __pgd_error(const char *file, int line, unsigned long val) {
+  printk("%s:%d: bad pgd %016lx.\n", file, line, val);
 }
 
-void __init trap_init(void)
-{
-	return;
-}
+void __init trap_init(void) { return; }

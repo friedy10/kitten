@@ -291,14 +291,13 @@ el1_da:
 	disable_irq
 	kernel_exit 1
 el1_sp_pc:
-	b .
 	/*
 	 * Stack or PC alignment exception handling
 	 */
-	mrs	x0, far_el1
-	mov	x1, x25
-	mov	x2, sp
-	b	. //do_sp_pc_abort
+	mov	x0, sp
+	mov	x1, #BAD_SYNC
+	mrs	x2, esr_el1
+	b	bad_mode
 el1_undef:
 	/*
 	 * Undefined instruction
@@ -306,14 +305,13 @@ el1_undef:
 	mov	x0, sp
 	b	do_undefinstr
 el1_dbg:
-	b .
 	/*
 	 * Debug exception handling
 	 */
-	tbz	x24, #0, el1_inv		// EL1 only
-	mrs	x0, far_el1
-	mov	x2, sp				// struct pt_regs
-	bl	. //do_debug_exception
+	mov	x0, sp
+	mov	x1, #BAD_SYNC
+	mrs	x2, esr_el1
+	b	bad_mode
 
 	kernel_exit 1
 el1_inv:
