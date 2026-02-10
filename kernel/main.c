@@ -104,27 +104,34 @@ void start_kernel() {
    * instead (e.g., kmem_alloc() and kmem_free()).
    */
   mem_subsys_init();
+  early_printk("mem_subsys_init done\n");
 
   /*
    * Initialize the address space management subsystem.
    */
   aspace_subsys_init();
+  early_printk("aspace_subsys_init done\n");
 
-  sched_init_runqueue(0);  /* This CPUs scheduler state + idle task */
+  sched_init_runqueue(0); /* This CPUs scheduler state + idle task */
+  early_printk("sched_init_runqueue done\n");
   sched_add_task(current); /* now safe to call schedule() */
+  early_printk("sched_add_task done\n");
 
   /*
    * Initialize the task scheduling subsystem.
    */
   core_timer_init(0);
+  early_printk("core_timer_init done\n");
 
   /* Start the kernel filesystems */
   kfs_init();
+  early_printk("kfs_init done\n");
 
   /*
    * Initialize the random number generator.
    */
   rand_init();
+  early_printk("rand_init done\n");
 
   /*
    * Boot all of the other CPUs in the system, one at a time.
