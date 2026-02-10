@@ -519,7 +519,7 @@ __create_page_tables:
 	and	x3, x3, #~((1 << 21) - 1)	// 2MB aligned
 	mov	x6, #PAGE_OFFSET
 	sub	x5, x3, x24			// subtract PHYS_OFFSET
-	tst	x5, #~((1 << 29) - 1)		// within 512MB?
+	tst	x5, #~((1 << 32) - 1)		// within 4GB?
 	csel	x21, xzr, x21, ne		// zero the FDT pointer
 	b.ne	1f
 	add	x5, x5, x6			// __va(FDT blob)
@@ -685,7 +685,8 @@ __vet_fdt:
 	b.ne	1f
 	cmp	x21, x24
 	b.lt	1f
-	mov	x0, #(1 << 29)
+	mov	x0, #1
+	lsl	x0, x0, #32
 	add	x0, x0, x24
 	cmp	x21, x0
 	b.ge	1f
