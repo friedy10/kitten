@@ -1,75 +1,64 @@
-/* 
- * 2021, Jack Lange <jacklange@cs.pitt.edu>
+/*
+ * 2021, Jack <jacklange@cs.pitt.edu>
  */
+/*
+ * Interrupt Controller interface
+ */
+#include <lwk/types.h>
 
-#ifndef _ARM64_IRQCHIP_H
+#ifndef __ARCH_IRQCHIP_H__
 #define _ARM64_IRQCHIP_H
 
-typedef enum {
-	IRQ_LEVEL_TRIGGERED,
-	IRQ_EDGE_TRIGGERED
-} irq_trigger_mode_t;
-
-
+typedef enum { IRQ_LEVEL_TRIGGERED, IRQ_EDGE_TRIGGERED } irq_trigger_mode_t;
 
 struct arch_irq {
-	enum {ARCH_IRQ_INVALID,
-		  ARCH_IRQ_IPI,
-	      ARCH_IRQ_EXT} type;
+  enum { ARCH_IRQ_INVALID, ARCH_IRQ_IPI, ARCH_IRQ_EXT } type;
 
-	uint32_t vector;
-	uint64_t eoi_val; 
+  uint32_t vector;
+  uint64_t eoi_val;
 };
 
 struct irqchip {
-	char * name;
-	struct device_node * dt_node;
-	int  (*core_init)(struct device_node * dt_node);
-	void (*enable_irq)(uint32_t vector, irq_trigger_mode_t mode);
-	void (*disable_irq)(uint32_t vector); 
-	void (*do_eoi)(struct arch_irq irq);
-	struct arch_irq (*ack_irq)();
+  char *name;
+  struct device_node *dt_node;
+  int (*core_init)(struct device_node *dt_node);
+  void (*enable_irq)(uint32_t vector, irq_trigger_mode_t mode);
+  void (*disable_irq)(uint32_t vector);
+  void (*do_eoi)(struct arch_irq irq);
+  struct arch_irq (*ack_irq)();
 
-	void (*send_ipi)(int target_cpu, uint32_t vector);
+  void (*send_ipi)(int target_cpu, uint32_t vector);
 
-	int  (*parse_devtree_irqs)(struct device_node * dt_node, uint32_t num_irqs, struct irq_def * irqs);
+  int (*parse_devtree_irqs)(struct device_node *dt_node, uint32_t num_irqs,
+                            struct irq_def *irqs);
 
-	void (*dump_state)(void);
-	void (*print_pending_irqs)(void);
+  void (*dump_state)(void);
+  void (*print_pending_irqs)(void);
 };
 
-typedef int (*irqchip_init_fn)(struct device_node *); 
+typedef int (*irqchip_init_fn)(struct device_node *);
 
-int irqchip_register(struct irqchip * chip);
-
-
+int irqchip_register(struct irqchip *chip);
 
 int irqchip_global_init(void);
 int irqchip_local_init(void);
 
-
-
-
 void irqchip_enable_irq(uint32_t vector, irq_trigger_mode_t mode);
 void irqchip_disable_irq(uint32_t vector);
 
-void             irqchip_do_eoi(struct arch_irq irq);
-struct arch_irq  irqchip_ack_irq(void);
-void             irqchip_send_ipi(int target_cpu, uint32_t vector);
-
-
+void irqchip_do_eoi(struct arch_irq irq);
+struct arch_irq irqchip_ack_irq(void);
+void irqchip_send_ipi(int target_cpu, uint32_t vector);
 
 struct irq_def {
-	uint32_t           vector;
-	irq_trigger_mode_t mode;
+  uint32_t vector;
+  irq_trigger_mode_t mode;
 };
 
-int parse_fdt_irqs(struct device_node * dt_node, 
-		   uint32_t             num_irqs, 
-		   struct irq_def     * irqs);
+int parse_fdt_irqs(struct device_node *dt_node, uint32_t num_irqs,
+                   struct irq_def *irqs);
 
 void probe_pending_irqs(void);
 void irqchip_dump_state(void);
-
 
 #endif
