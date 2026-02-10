@@ -8,7 +8,7 @@ BOOT_PART_SIZE_MB=128
 TEMP_BOOT_IMG="boot.vfat"
 
 # Required tools
-REQUIRED_TOOLS=("dd" "mcopy" "mformat" "cpio" "make" "git" "aarch64-linux-gnu-gcc" "bison" "flex")
+REQUIRED_TOOLS=("dd" "mcopy" "mformat" "cpio" "make" "git" "aarch64-linux-gnu-gcc" "arm-none-eabi-gcc" "bison" "flex")
 
 # Linux specific check for partitioning tool
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
@@ -30,6 +30,7 @@ fi
 for tool in "${REQUIRED_TOOLS[@]}"; do
     if ! command -v "$tool" &> /dev/null; then
         echo "Error: Required tool '$tool' is not installed."
+        echo "For 'arm-none-eabi-gcc', install package 'gcc-arm-none-eabi' or similar."
         exit 1
     fi
 done
@@ -47,8 +48,8 @@ fi
 ATF_DIR="arm-trusted-firmware"
 if [ ! -d "$ATF_DIR" ]; then
     echo "Cloning ARM Trusted Firmware..."
-    # Using shallow clone for speed
-    git clone --depth 1 https://github.com/ARM-software/arm-trusted-firmware.git "$ATF_DIR"
+    # Using v2.9 tag for stability
+    git clone --depth 1 --branch v2.9 https://github.com/ARM-software/arm-trusted-firmware.git "$ATF_DIR"
 fi
 
 if [ ! -f "$ATF_DIR/build/rk3399/release/bl31/bl31.elf" ]; then
@@ -56,7 +57,8 @@ if [ ! -f "$ATF_DIR/build/rk3399/release/bl31/bl31.elf" ]; then
     pushd "$ATF_DIR"
     # Clean just in case
     # make distclean
-    make CROSS_COMPILE=aarch64-linux-gnu- PLAT=rk3399 bl31 -j$(nproc)
+    # Note: RK3399 needs Cortex-M0 compiler for PMU firmware.
+    make CROSS_COMPILE=aarch64-linux-gnu- M0_CROSS_COMPILE=arm-none-eabi- PLAT=rk3399 bl31 -j$(nproc)
     popd
 fi
 
@@ -181,12 +183,11 @@ dd if="u-boot.itb" of="$IMAGE_FILE" seek=16384 conv=notrunc status=none
 # Flash Boot Partition
 # Offset: 16MB (16777216 bytes)
 START_OFFSET=$((16 * 1024 * 1024))
-echo "Writing filesystem to partition at offset $START_OFFSET..."
+echo "Writing partition content at offset $START_OFFSET..."
 dd if="$TEMP_BOOT_IMG" of="$IMAGE_FILE" bs=1 seek=$START_OFFSET conv=notrunc status=none
 
 # Cleanup contents?
 rm "$TEMP_BOOT_IMG"
-# We keep the built u-boot/atf folders to avoid rebuilding every time.
 
 echo "Done! Image created: $IMAGE_FILE"
 echo "To flash: sudo dd if=$IMAGE_FILE of=/dev/sdX bs=4M status=progress"
