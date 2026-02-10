@@ -178,11 +178,20 @@ ENTRY(stext)
 
 	bl	__calc_phys_offset		// x24=PHYS_OFFSET, x28=PHYS_OFFSET-PAGE_OFFSET
 
+	serial_write_str ' '
+	serial_write_str 'C', 'H', 'K'
+	serial_write_str ' '
+	serial_write_reg x21
+
 	/* Relocate FDT if > 512MB (0x20000000) */
 	mov	x2, #1
 	lsl	x2, x2, #29
 	cmp	x21, x2
 	b.ls	0f			// If low, skip copy
+
+	serial_write_str ' '
+	serial_write_str 'R', 'E', 'L'
+	serial_write_str ' '
 
 	/* Calculate Phys(_end) */
 	ldr	x2, =_end
@@ -192,6 +201,8 @@ ENTRY(stext)
 	add	x2, x2, #7
 	lsr	x2, x2, #3
 	lsl	x2, x2, #3
+
+	serial_write_reg x2
 
 	mov	x3, x21			// x3 = Src (Old FDT)
 	mov	x21, x2			// x21 = Dest (New FDT)
@@ -209,6 +220,10 @@ ENTRY(stext)
 	subs	w4, w4, #1
 	b.ne	1b
 0:
+	serial_write_str ' '
+	serial_write_str 'D', 'O', 'N', 'E'
+	serial_write_str ' '
+	serial_write_reg x21
 	bl	__vet_fdt
 	bl	__create_page_tables		// x25=TTBR0, x26=TTBR1
 	/*
